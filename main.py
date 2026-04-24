@@ -37,7 +37,7 @@ def detetar_protocolo(pct) -> str: # Deteta o protocolo da cena posso me ter esq
 
 def extrair_caminho_pacote (pct) -> tuple[str, str]: #Extrai a origem e o destino da cena
     if pct.haslayer(ARP):
-        return str(pct[ARP].psrc), str(pct[ARP].pdst)
+        return str(pct[ARP].src), str(pct[ARP].dst)
     if pct.haslayer(IP):
         return str(pct[IP].src), str(pct[IP].dst)
     if pct.haslayer(IPv6):
