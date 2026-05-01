@@ -43,14 +43,14 @@ def parse():
 
     return args
 
-def printPacote(tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac):
+def printPacote(i, tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac):
     #testa se tem --mac primeiro se não tiver dá default para o IP 
     if mac and Ether in pkt:
-        print(f"{tempo:<20} {src_mac:<20} {dst_mac:<20} {protocol:<10} {size}")
+        print(f"{i+1:<5}{tempo:<20} {src_mac:<20} {dst_mac:<20} {protocol:<10} {size}")
     elif IP in pkt:
-        print(f"{tempo:<20} {src_ip:<20} {dst_ip:<20} {protocol:<10} {size}")
+        print(f"{i+1:<5}{tempo:<20} {src_ip:<20} {dst_ip:<20} {protocol:<10} {size}")
     elif Ether in pkt:
-        print(f"{tempo:<20} {src_mac:<20} {dst_mac:<20} {protocol:<10} {size}")
+        print(f"{i+1:<5}{tempo:<20} {src_mac:<20} {dst_mac:<20} {protocol:<10} {size}")
 
 
 
@@ -66,9 +66,9 @@ def filtro (prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip) -> bool:
 
     if mac:
         if mac[1] == "src":
-            if mac[0] != mac_ip:return False
+            if mac[0] != src_mac:return False
         elif mac[1] == "dst":
-            if mac[0] != mac_ip:return False
+            if mac[0] != dst_mac:return False
     return True
 
     
@@ -112,7 +112,7 @@ def sniffer(qnt, prtl, ip, mac, log, live):
         #metemos os filtros no print pacotes acho eu, ou então mal se vê o protocol e isso verifica logo se entra no filtro e
         #para logo o código com break ou o caralho
         if filtro(prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip):
-            printPacote(tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac)
+            printPacote(i, tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac)
             i += 1  # só conta se passar no filtro
 
     
@@ -124,7 +124,7 @@ def main() -> int:
     if args is None:
         return 0
 
-    print(f"{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho"}")
+    print(f"{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho"}")
     sniffer(args.qnt, args.prtl, args.ip, args.mac, args.log, args.live)
 
 
