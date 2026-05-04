@@ -5,7 +5,6 @@ import signal
 from datetime import datetime
 from scapy.all import sniff, Ether, IP, IPv6, ARP, ICMP, TCP, UDP, DNS, DHCP
 import csv
-import json
 
 def detetar_protocolo(pct) -> str:
     if pct.haslayer(ARP):
@@ -100,11 +99,9 @@ def parse():
 
     args = parser.parse_args()
 
-    if args.qnt is None and not args.live and not args.log:
-        args.live = True
-
-    if (args.live and args.qnt):
-        parser.error ("Escolha apenas um modo de captura: --live ou --qnt")
+    if not args.live:
+        if (not args.log and args.qnt) or (not args.log and not args.qnt):
+            args.live = True
 
     return args
 
@@ -251,19 +248,26 @@ def main() -> int:
     i = 0
 
     if args.live:
-        if args.log:
-            print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
-
-        print ("\n--- [Modo live ativo] Ctrl+C para sair ---\n")
-        print(f"{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
-        while not stop_capture["value"]:
-            i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt) 
-    
-    elif args.qnt:
-        if args.log:
-            print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
-        print (f"\n--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
-        print(f"{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
+        if not args.qnt:
+            if args.log:
+                print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+            print ("\n--- [Modo live ativo] Ctrl+C para sair ---\n")
+            print(f"\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
+            while not stop_capture["value"]:
+                i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
+        else:
+            if args.log:
+                print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+            print ("\n--- [Modo live ativo] ---\n")
+            print (f"\n--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
+            print(f"\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
+            while i < args.qnt:
+                i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
+            
+        
+    elif args.log and args.qnt:
+        print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+        print (f"--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
         while i < args.qnt:
             i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
 
@@ -273,6 +277,7 @@ def main() -> int:
         print (f"Prima Ctrl+C para sair \n")
         while not stop_capture["value"]:
             i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
+
 
     print("\n--- [LarpSniffer] Programa Terminado! ---\n")
     return 0
