@@ -248,34 +248,71 @@ def main() -> int:
     i = 0
 
     if args.live:
+
         if not args.qnt:
+
             if args.log:
+
                 print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+
             print ("\n--- [Modo live ativo] Ctrl+C para sair ---\n")
+
             print(f"\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
-            while not stop_capture["value"]:
+
+            while 1:
+
+                if stop_capture["value"]: 
+
+                    break
+
                 i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
+
         else:
+
             if args.log:
+
                 print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+
             print ("\n--- [Modo live ativo] ---\n")
+
             print (f"\n--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
+
             print(f"\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
+
             while i < args.qnt:
+                if stop_capture["value"]: 
+
+                    break
                 i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
             
         
     elif args.log and args.qnt:
+
         print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+
         print (f"--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
+
         while i < args.qnt:
+            if stop_capture["value"]: 
+
+                    break
+                
             i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
 
     elif args.log:
+
         print (f"\n--- [Modo ficheiro ativo] Ficheiro: {nomeFicheiro} ---\n")
+
         print (f"A guardar captura...\n")
+
         print (f"Prima Ctrl+C para sair \n")
-        while not stop_capture["value"]:
+
+        while 1:
+            
+            if stop_capture["value"]: 
+
+                    break
+
             i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
 
 
