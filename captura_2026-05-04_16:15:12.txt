@@ -1,0 +1,13 @@
+----- Internet Packet Sniffer -----
+
+     Tempo                Origem               Destino              Protocolo  Tamanho    Info
+1    16:15:12.329         192.168.1.148        20.42.65.94          TCP        179        [PSH-ACK]   Seq = 3842485946  Ack = 2967789826  Win = 74  Checksum = 29954
+2    16:15:12.448         20.42.65.94          192.168.1.148        TCP        66         [ACK]   Seq = 2967789826  Ack = 3842487459  Win = 16384  Checksum = 26597
+3    16:15:12.494         192.168.1.148        20.42.65.94          TCP        66         [ACK]   Seq = 3842490824  Ack = 2967789920  Win = 74  Checksum = 39279
+4    16:15:13.944         192.168.1.125        224.0.0.251          DNS        667        DNS request   id = 0  qdCount = 0  anCount = 12
+5    16:15:15.882         50:5a:65:f7:3b:df    cc:20:8c:8d:9c:47    IPv6       86         Hope Limit = 255  Next Header = 58  Payload Length = 32
+6    16:15:16.394         192.168.1.148        18.158.126.168       TCP        66         [ACK]   Seq = 1990924270  Ack = 585567762  Win = 63  Checksum = 20761
+7    16:15:16.455         18.158.126.168       192.168.1.148        TCP        66         [ACK]   Seq = 585567762  Ack = 1990924271  Win = 190  Checksum = 16447
+8    16:15:17.945         192.168.1.125        224.0.0.251          DNS        667        DNS request   id = 0  qdCount = 0  anCount = 12
+9    16:15:18.554         192.168.1.66         239.255.255.250      UDP        446        Length = 412  Checksum = 27996
+10   16:15:18.696         192.168.1.66         239.255.255.250      UDP        446        Length = 412  Checksum = 38929

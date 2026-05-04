@@ -100,15 +100,15 @@ def parse():
 
     args = parser.parse_args()
 
-    if args.qnt is None and not args.live:
+    if args.qnt is None and not args.live and not args.log:
         args.live = True
 
-    if (args.live and args.qnt) or (args.qnt is not None and args.live):
+    if (args.live and args.qnt):
         parser.error ("Escolha apenas um modo de captura: --live ou --qnt")
 
     return args
 
-def printPacote(i, tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac, info) -> str:
+def printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, mac, info, live, qnt) -> str:
     #testa se tem --mac primeiro se não tiver dá default para o IP 
     if mac and Ether in pkt:
         src = src_mac
@@ -125,7 +125,8 @@ def printPacote(i, tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_i
     
     p = f"{i+1:<5}{tempo:<20} {src:<20} {dst:<20} {protocol:<10} {size:<10} {info}"
 
-    print(p)
+    if live or qnt :
+       print(p)
 
     dados = [i+1, tempo, src, dst, protocol, size, info]
     return p, dados
@@ -160,7 +161,7 @@ def logs(nomeFicheiro, p, log):
             writer.writerow(p)
 
 
-def sniffer(prtl, ip, mac, log, i, nomeFicheiro) -> int :
+def sniffer(prtl, ip, mac, log, i, nomeFicheiro, live, qnt) -> int :
 
     pkts = sniff(count=1)
     pkt = pkts[0]
@@ -200,7 +201,7 @@ def sniffer(prtl, ip, mac, log, i, nomeFicheiro) -> int :
     #metemos os filtros no print pacotes acho eu, ou então mal se vê o protocol e isso verifica logo se entra no filtro e
     #para logo o código com break ou o caralho
     if filtro(prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip):
-        p, dados = printPacote(i, tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac, info)
+        p, dados = printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, mac, info, live, qnt)
         if log == ".txt":
             logs(nomeFicheiro, p, log)
         elif log == ".csv" or log == ".json":
@@ -212,7 +213,7 @@ def sniffer(prtl, ip, mac, log, i, nomeFicheiro) -> int :
 
 def ficheiro(log) -> str:
     tempo = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    nome = f"captura_{tempo}.{log}"
+    nome = f"captura_{tempo}{log}"
 
     if log == ".txt":
         inicioT = f"----- Internet Packet Sniffer -----\n\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}\n"
@@ -247,20 +248,31 @@ def main() -> int:
         else :
             nomeFicheiro = ficheiro(args.log)
 
-
     i = 0
 
     if args.live:
+        if args.log:
+            print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+
         print ("\n--- [Modo live ativo] Ctrl+C para sair ---\n")
         print(f"{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
         while not stop_capture["value"]:
-            i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro)
+            i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt) 
     
     elif args.qnt:
+        if args.log:
+            print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
         print (f"\n--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
         print(f"{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
         while i < args.qnt:
-            i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro)
+            i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
+
+    elif args.log:
+        print (f"\n--- [Modo ficheiro ativo] Ficheiro: {nomeFicheiro} ---\n")
+        print (f"A guardar captura...\n")
+        print (f"Prima Ctrl+C para sair \n")
+        while not stop_capture["value"]:
+            i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro, args.live, args.qnt)
 
     print("\n--- [LarpSniffer] Programa Terminado! ---\n")
     return 0

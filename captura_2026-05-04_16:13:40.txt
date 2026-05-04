@@ -1,0 +1,13 @@
+----- Internet Packet Sniffer -----
+
+     Tempo                Origem               Destino              Protocolo  Tamanho    Info
+1    16:13:40.906         192.168.1.148        224.0.0.22           IPv4       54         TTL = 1  Flag = DF  Len = 40  Checksum = 16829
+2    16:13:42.093         192.168.1.219        224.0.0.251          DNS        115        DNS query   id = 0  qdCount = 3  anCount = 0
+3    16:13:42.277         192.168.1.148        20.42.65.94          TCP        179        [PSH-ACK]   Seq = 3842445384  Ack = 2967788493  Win = 74  Checksum = 21403
+4    16:13:42.343         192.168.1.219        224.0.0.251          DNS        121        DNS query   id = 0  qdCount = 1  anCount = 1
+5    16:13:42.391         20.42.65.94          192.168.1.148        TCP        66         [ACK]   Seq = 2967788493  Ack = 3842446897  Win = 16384  Checksum = 51995
+6    16:13:42.433         192.168.1.148        20.42.65.94          TCP        66         [ACK]   Seq = 3842447896  Ack = 2967788588  Win = 74  Checksum = 1520
+7    16:13:43.116         192.168.1.219        224.0.0.251          DNS        150        DNS query   id = 0  qdCount = 3  anCount = 1
+8    16:13:43.629         192.168.1.125        224.0.0.251          DNS        254        DNS query   id = 0  qdCount = 5  anCount = 0
+9    16:13:43.833         192.168.1.125        224.0.0.251          DNS        254        DNS query   id = 0  qdCount = 5  anCount = 0
+10   16:13:44.038         192.168.1.125        224.0.0.251          DNS        254        DNS query   id = 0  qdCount = 5  anCount = 0
