@@ -122,7 +122,7 @@ def printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt,
     
     p = f"{i+1:<5}{tempo:<20} {src:<20} {dst:<20} {protocol:<10} {size:<10} {info}"
 
-    if live or qnt :
+    if live :
        print(p)
 
     dados = [i+1, tempo, src, dst, protocol, size, info]
