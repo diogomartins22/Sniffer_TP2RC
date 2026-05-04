@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import signal
 from datetime import datetime
-from scapy.all import sniff, Ether, IP, IPv6, ARP, ICMP, ICMPv6EchoRequest, TCP, UDP, DNS, DHCP
+from scapy.all import sniff, Ether, IP, IPv6, ARP, ICMP, TCP, UDP, DNS, DHCP
+import csv
+import json
 
 def detetar_protocolo(pct) -> str:
     if pct.haslayer(ARP):
@@ -26,31 +28,107 @@ def detetar_protocolo(pct) -> str:
         return "Ethernet"
     return "Outro"
 
+def conteudo_protocolo(pct) -> str:
+    if pct.haslayer(ARP):
+        if pct[ARP].op == 1:
+            return "ARP request"
+        elif pct[ARP].op == 2:
+            return "ARP reply"
+
+    if pct.haslayer(DHCP):
+            return pct[DHCP].options
+        
+    if pct.haslayer(DNS):
+        if pct[DNS].qr == 0:
+            qr = "DNS query"
+        elif pct[DNS].qr == 1:
+            qr = "DNS request"
+        return f"{qr}   id = {pct[DNS].id}  qdCount = {pct[DNS].qdcount}  anCount = {pct[DNS].ancount}"
+    
+    if pct.haslayer(ICMP):
+        if pct[ICMP].type == 8 :
+            tipo = "ICMP echo request"
+        elif pct[ICMP].type == 0:
+            tipo = "ICMP echo reply"
+        return f"{tipo}   Code = {pct[ICMP].code}  Id = {pct[ICMP].id}  Seq = {pct[ICMP].seq}  Checksum = {pct[TCP].chksum}"
+        
+    if pct.haslayer(TCP):
+        flag = pct[TCP].flags
+        f = ""
+        if flag == "A":
+            f = "[ACK]"
+        elif flag == "S":
+            f = "[SYN]"
+        elif flag == "F":
+            f = "[FIN]"
+        elif flag == "P":
+            f = "[PSH]"
+        elif flag == "PA":
+            f = "[PSH-ACK]"
+        elif flag == "SA":
+            f = "[SYN-ACK]"
+        elif flag == "R":
+            f = "[RST]"
+        return f"{f}   Seq = {pct[TCP].seq}  Ack = {pct[TCP].ack}  Win = {pct[TCP].window}  Checksum = {pct[TCP].chksum}"
+    
+    if pct.haslayer(UDP):
+        return f"Length = {pct[UDP].len}  Checksum = {pct[UDP].chksum}"
+
+    if pct.haslayer(IP):
+        flag = pct[IP].flags
+        if not flag :
+            flag = "0"
+        return f"TTL = {pct[IP].ttl}  Flag = {flag}  Len = {pct[IP].len}  Checksum = {pct[IP].chksum}"
+    
+    if pct.haslayer(IPv6):
+        return f"Hope Limit = {pct[IPv6].hlim}  Next Header = {pct[IPv6].nh}  Payload Length = {pct[IPv6].plen}"
+    
+    return ""
+
 def parse():
     parser = argparse.ArgumentParser(
         prog='LarpSniffer',
-        description='Internet Packet Sniffer',
+        description='----- Internet Packet Sniffer -----',
         epilog='Use --help for more info'
     )
-    parser.add_argument('--qnt', type=int, help="número de pacotes")
-    parser.add_argument('--prtl', type=str, help="protocolo a filtrar")
+    parser.add_argument('--qnt', type=int, help="captura QNT pacotes")
+    parser.add_argument('--prtl', type=str, help="filtrar por protocolo")
     parser.add_argument('--ip',nargs=2, metavar=('IP', 'src/dst'), help="filtrar por IP")
     parser.add_argument('--mac',nargs=2, metavar=('MAC', 'src/dst'), help="filtrar por MAC")
-    parser.add_argument('--log', type=str, help="guardar pacotes num ficheiro")
-    parser.add_argument('--live', action='store_true', help="mostrar pacotes no terminal")
+    parser.add_argument('--log', type=str, help="guardar num ficheiro .txt ou .csv")
+    parser.add_argument('--live', action='store_true', help="captura contínua de pacotes (Default)")
 
     args = parser.parse_args()
 
+    if args.qnt is None and not args.live:
+        args.live = True
+
+    if (args.live and args.qnt) or (args.qnt is not None and args.live):
+        parser.error ("Escolha apenas um modo de captura: --live ou --qnt")
+
     return args
 
-def printPacote(i, tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac):
+def printPacote(i, tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac, info) -> str:
     #testa se tem --mac primeiro se não tiver dá default para o IP 
     if mac and Ether in pkt:
-        print(f"{i+1:<5}{tempo:<20} {src_mac:<20} {dst_mac:<20} {protocol:<10} {size}")
+        src = src_mac
+        dst = dst_mac
     elif IP in pkt:
-        print(f"{i+1:<5}{tempo:<20} {src_ip:<20} {dst_ip:<20} {protocol:<10} {size}")
+        src = src_ip
+        dst = dst_ip
     elif Ether in pkt:
-        print(f"{i+1:<5}{tempo:<20} {src_mac:<20} {dst_mac:<20} {protocol:<10} {size}")
+        src = src_mac
+        dst = dst_mac
+    else: 
+        src = "?"
+        dst = "?"
+    
+    p = f"{i+1:<5}{tempo:<20} {src:<20} {dst:<20} {protocol:<10} {size:<10} {info}"
+
+    print(p)
+
+    dados = [i+1, tempo, src, dst, protocol, size, info]
+    return p, dados
 
 
 
@@ -71,62 +149,87 @@ def filtro (prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip) -> bool:
             if mac[0] != dst_mac:return False
     return True
 
+
+def logs(nomeFicheiro, p, log):
+    if log == ".txt":
+        with open(nomeFicheiro, 'a') as f:
+            f.write(f"{p}\n")
+    elif log == ".csv":
+        with open(nomeFicheiro, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(p)
+
+
+def sniffer(prtl, ip, mac, log, i, nomeFicheiro) -> int :
+
+    pkts = sniff(count=1)
+    pkt = pkts[0]
+    #data/hora do pacote
+    tempo = datetime.fromtimestamp(pkt.time).strftime("%H:%M:%S.%f")[:-3] #passar de timestamp para tempo
+    
+    #interface
+    iface = pkt.sniffed_on
+
+    # Tamanho
+    size = len(pkt)
+
+    #protocol
+    protocol = detetar_protocolo(pkt)
     
 
-def sniffer(qnt, prtl, ip, mac, log, live):
-    i = 0
-    while i < qnt:
-        pkts = sniff(count=1)
-        pkt = pkts[0]
-        #data/hora do pacote
-        tempo = datetime.fromtimestamp(pkt.time).strftime("%H:%M:%S.%f")[:-3] #passar de timestamp para tempo
-        
-        #interface
-        iface = pkt.sniffed_on
-
-        # Tamanho
-        size = len(pkt)
-
-        #protocol
-        protocol = detetar_protocolo(pkt)
-
-        # MAC addresses
-        if Ether in pkt:
-            src_mac = pkt[Ether].src 
-        else: src_mac = "?" 
-        if Ether in pkt:
-            dst_mac = pkt[Ether].dst
-        else: dst_mac = "?" 
+    # MAC addresses
+    if Ether in pkt:
+        src_mac = pkt[Ether].src 
+    else: src_mac = "?" 
+    if Ether in pkt:
+        dst_mac = pkt[Ether].dst
+    else: dst_mac = "?" 
 
 
-        # IP addresses
-        if IP in pkt:
-            src_ip = pkt[IP].src 
-        else: src_ip = "?" 
-        if IP in pkt:
-            dst_ip = pkt[IP].dst
-        else: dst_ip = "?" 
+    # IP addresses
+    if IP in pkt:
+        src_ip = pkt[IP].src 
+    else: src_ip = "?" 
+    if IP in pkt:
+        dst_ip = pkt[IP].dst
+    else: dst_ip = "?" 
 
-        #falta o resumo do conteúdo (ex.: “ARP request”, “ICMP echo request”, “DHCP Discover”, etc.) depois vê-se
+    #falta o resumo do conteúdo (ex.: “ARP request”, “ICMP echo request”, “DHCP Discover”, etc.) depois vê-se
+    info = conteudo_protocolo(pkt)
 
-        #metemos os filtros no print pacotes acho eu, ou então mal se vê o protocol e isso verifica logo se entra no filtro e
-        #para logo o código com break ou o caralho
-        if filtro(prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip):
-            printPacote(i, tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac)
-            i += 1  # só conta se passar no filtro
-
+    #metemos os filtros no print pacotes acho eu, ou então mal se vê o protocol e isso verifica logo se entra no filtro e
+    #para logo o código com break ou o caralho
+    if filtro(prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip):
+        p, dados = printPacote(i, tempo, iface, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, ip, mac, info)
+        if log == ".txt":
+            logs(nomeFicheiro, p, log)
+        elif log == ".csv" or log == ".json":
+            logs(nomeFicheiro, dados, log) 
+        i += 1  # só conta se passar no filtro
     
+    return i
 
 
+def ficheiro(log) -> str:
+    tempo = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+    nome = f"captura_{tempo}.{log}"
+
+    if log == ".txt":
+        inicioT = f"----- Internet Packet Sniffer -----\n\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}\n"
+        with open(nome, 'w') as f:
+            f.write(inicioT)
+
+    elif log == ".csv":
+        inicioC = ["Tempo", "Origem", "Destino", "Protocolo", "Tamanho", "Info"]
+        with open(nome, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(inicioC)
+
+
+    return nome
 
 def main() -> int:
     args = parse()
-    if args is None:
-        return 0
-
-    print(f"{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho"}")
-    sniffer(args.qnt, args.prtl, args.ip, args.mac, args.log, args.live)
-
 
     stop_capture = {"value": False}
 
@@ -135,6 +238,31 @@ def main() -> int:
         print("\nA parar captura...")
 
     signal.signal(signal.SIGINT, tratar_sigint)
+
+    nomeFicheiro = ""
+  
+    if args.log is not None:
+        if args.log not in [".txt", ".csv"]:
+            raise ValueError("Uso inválido de --log. Usa .txt, ou .csv  | Use --help for more info")
+        else :
+            nomeFicheiro = ficheiro(args.log)
+
+
+    i = 0
+
+    if args.live:
+        print ("\n--- [Modo live ativo] Ctrl+C para sair ---\n")
+        print(f"{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
+        while not stop_capture["value"]:
+            i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro)
+    
+    elif args.qnt:
+        print (f"\n--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
+        print(f"{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
+        while i < args.qnt:
+            i = sniffer(args.prtl, args.ip, args.mac, args.log, i, nomeFicheiro)
+
+    print("\n--- [LarpSniffer] Programa Terminado! ---\n")
     return 0
 
 
