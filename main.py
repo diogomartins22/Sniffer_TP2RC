@@ -128,8 +128,6 @@ def printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt,
     dados = [i+1, tempo, src, dst, protocol, size, info]
     return p, dados
 
-
-
 def filtro (prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip) -> bool:
     if prtl:
         if prtl != protocol: return False
@@ -147,7 +145,6 @@ def filtro (prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip) -> bool:
             if mac[0] != dst_mac:return False
     return True
 
-
 def logs(nomeFicheiro, p, log):
     if log == ".txt":
         with open(nomeFicheiro, 'a') as f:
@@ -156,7 +153,6 @@ def logs(nomeFicheiro, p, log):
         with open(nomeFicheiro, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(p)
-
 
 def sniffer(prtl, ip, mac, log, i, nomeFicheiro, live, qnt) -> int :
 
@@ -206,7 +202,6 @@ def sniffer(prtl, ip, mac, log, i, nomeFicheiro, live, qnt) -> int :
         i += 1  # só conta se passar no filtro
     
     return i
-
 
 def ficheiro(log) -> str:
     tempo = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
@@ -318,7 +313,6 @@ def main() -> int:
 
     print("\n--- [LarpSniffer] Programa Terminado! ---\n")
     return 0
-
 
 if __name__ == "__main__":
     main()
