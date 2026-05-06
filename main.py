@@ -49,7 +49,7 @@ def conteudo_protocolo(pct) -> str:
             tipo = "ICMP echo request"
         elif pct[ICMP].type == 0:
             tipo = "ICMP echo reply"
-        return f"{tipo}   Code = {pct[ICMP].code}  Id = {pct[ICMP].id}  Seq = {pct[ICMP].seq}  Checksum = {pct[TCP].chksum}"
+        return f"{tipo}   Code = {pct[ICMP].code}  Id = {pct[ICMP].id}  Seq = {pct[ICMP].seq}  Checksum = {pct[ICMP].chksum}"
         
     if pct.haslayer(TCP):
         flag = pct[TCP].flags
