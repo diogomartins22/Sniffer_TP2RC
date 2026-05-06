@@ -1,3 +1,0 @@
------ Internet Packet Sniffer -----
-
-     Tempo                Origem               Destino              Protocolo  Tamanho    Info

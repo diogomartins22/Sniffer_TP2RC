@@ -213,7 +213,7 @@ def ficheiro(log) -> str:
     nome = f"captura_{tempo}{log}"
 
     if log == ".txt":
-        inicioT = f"----- Internet Packet Sniffer -----\n\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}\n"
+        inicioT = f"----- Internet Packet Sniffer -----\n\n{'':<5}{'Tempo':<20} {'Origem':<20} {'Destino':<20} {'Protocolo':<10} {'Tamanho':<10} {'Info'}\n"
         with open(nome, 'w') as f:
             f.write(inicioT)
 
@@ -257,7 +257,7 @@ def main() -> int:
 
             print ("\n--- [Modo live ativo] Ctrl+C para sair ---\n")
 
-            print(f"\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
+            print(f"\n{'':<5}{'Tempo':<20} {'Origem':<20} {'Destino':<20} {'Protocolo':<10} {'Tamanho':<10} {'Info'}")
 
             while 1:
 
@@ -277,7 +277,7 @@ def main() -> int:
 
             print (f"\n--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
 
-            print(f"\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
+            print(f"\n{'':<5}{'Tempo':<20} {'Origem':<20} {'Destino':<20} {'Protocolo':<10} {'Tamanho':<10} {'Info'}")
 
             while i < args.qnt:
                 if stop_capture["value"]: 
@@ -307,7 +307,7 @@ def main() -> int:
 
         print (f"Prima Ctrl+C para sair \n")
 
-        while 1:
+        while 1 :
             
             if stop_capture["value"]: 
 
