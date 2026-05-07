@@ -3,10 +3,11 @@ from __future__ import annotations
 import argparse
 import signal
 from datetime import datetime
-from scapy.all import sniff, Ether, IP, IPv6, ARP, ICMP, TCP, UDP, DNS, DHCP
+from scapy.all import sniff, Ether, IP, ARP, ICMP, TCP, UDP, DNS, DHCP, BOOTP
 import csv
 
 def detetar_protocolo(pct) -> str:
+    # Identifica o tipo de protocolo do pacote (ARP, DHCP, DNS, ICMP, TCP, UDP, IPv4, etc).
     if pct.haslayer(ARP):
         return "ARP"
     if pct.haslayer(DHCP):
@@ -19,7 +20,7 @@ def detetar_protocolo(pct) -> str:
         try:
             sport = int(pct[TCP].sport)
             dport = int(pct[TCP].dport)
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             sport = dport = None
         if sport in (80, 8080) or dport in (80, 8080):
             return "HTTP"
@@ -33,32 +34,98 @@ def detetar_protocolo(pct) -> str:
     return "Outro"
 
 def conteudo_protocolo(pct) -> str:
+    # Gera um resumo legível dos detalhes do protocolo para a coluna Info.
     if pct.haslayer(ARP):
+        # ARP: distinguir request (op=1) e reply (op=2).
         if pct[ARP].op == 1:
             return "ARP request"
         elif pct[ARP].op == 2:
             return "ARP reply"
 
     if pct.haslayer(DHCP):
-            return pct[DHCP].options
+        # Extrai opções DHCP e mostra campos relevantes (tipo, IP, máscara, etc).
+        dhcp_opts = pct[DHCP].options
+        opts = {}
+        for opt in dhcp_opts:
+            if isinstance(opt, tuple) and len(opt) >= 2:
+                opts[opt[0]] = opt[1]
+
+        # Mapeia message-type (1=Discover, 2=Offer, 3=Request, etc).
+        mt = opts.get('message-type')
+        try:
+            if isinstance(mt, (bytes, bytearray)) and len(mt) >= 1:
+                mtv = mt[0]
+            else:
+                mtv = int(mt) if mt is not None else None
+        except Exception:
+            mtv = None
+        mapping = {1: 'Discover', 2: 'Offer', 3: 'Request', 4: 'Decline', 5: 'Ack', 6: 'Nak', 7: 'Release', 8: 'Inform'}
+        mname = mapping.get(mtv, None) if mtv is not None else None
+
+        ch = None
+        if pct.haslayer(BOOTP):
+            raw_ch = getattr(pct[BOOTP], 'chaddr', None)
+            if isinstance(raw_ch, (bytes, bytearray)):
+                ch = ':'.join(f"{b:02x}" for b in raw_ch[:6])
+            else:
+                ch = raw_ch
+
+        parts = []
+        if mname:
+            parts.append(f"DHCP {mname}")
+        else:
+            parts.append("DHCP")
+
+        # selected short fields only
+        if 'requested_addr' in opts:
+            parts.append(f"req={opts['requested_addr']}")
+        if 'server_id' in opts:
+            parts.append(f"svr={opts['server_id']}")
+        if 'lease_time' in opts:
+            parts.append(f"lease={opts['lease_time']}")
+        if 'subnet_mask' in opts:
+            parts.append(f"mask={opts['subnet_mask']}")
+        if ch:
+            parts.append(f"ch={ch}")
+
+        return '   '.join(parts)
         
     if pct.haslayer(DNS):
-        if pct[DNS].qr == 0:
+        # DNS: qr=0 é query, qr=1 é response.
+        if getattr(pct[DNS], 'qr', 0) == 0:
             qr = "DNS query"
-        elif pct[DNS].qr == 1:
-            qr = "DNS request"
-        return f"{qr}   id = {pct[DNS].id}  qdCount = {pct[DNS].qdcount}  anCount = {pct[DNS].ancount}"
+        else:
+            qr = "DNS response"
+        return f"{qr}   id = {getattr(pct[DNS], 'id', '?')}  qdCount = {getattr(pct[DNS], 'qdcount', '?')}  anCount = {getattr(pct[DNS], 'ancount', '?')}"
     
     if pct.haslayer(ICMP):
-        if pct[ICMP].type == 8 :
+        # ICMP: echo request (type=8) e reply (type=0); campos id/seq existem só para echo.
+        icmp_type = getattr(pct[ICMP], 'type', None)
+        if icmp_type == 8:
             tipo = "ICMP echo request"
-        elif pct[ICMP].type == 0:
+        elif icmp_type == 0:
             tipo = "ICMP echo reply"
         else:
-            tipo = "ICMP"
-        return f"{tipo}   Code = {pct[ICMP].code}  Id = {pct[ICMP].id}  Seq = {pct[ICMP].seq}  Checksum = {pct[ICMP].chksum}"
+            tipo = f"ICMP type={icmp_type}"
+        code = getattr(pct[ICMP], 'code', None)
+        chksum = getattr(pct[ICMP], 'chksum', None)
+        parts = [f"{tipo}"]
+        if code is not None:
+            parts.append(f"Code={code}")
+        # id/seq only meaningful for echo messages
+        if icmp_type in (0, 8):
+            iid = getattr(pct[ICMP], 'id', None)
+            seq = getattr(pct[ICMP], 'seq', None)
+            if iid is not None:
+                parts.append(f"Id={iid}")
+            if seq is not None:
+                parts.append(f"Seq={seq}")
+        if chksum is not None:
+            parts.append(f"Checksum={chksum}")
+        return '   '.join(parts)
         
     if pct.haslayer(TCP):
+        # TCP: mostra flags (SYN, ACK, FIN, etc) e campos seq/ack/window/checksum.
         flag = pct[TCP].flags
         f = ""
         if flag == "A":
@@ -78,20 +145,20 @@ def conteudo_protocolo(pct) -> str:
         return f"{f}   Seq = {pct[TCP].seq}  Ack = {pct[TCP].ack}  Win = {pct[TCP].window}  Checksum = {pct[TCP].chksum}"
     
     if pct.haslayer(UDP):
+        # UDP: comprimento do datagrama e checksum.
         return f"Length = {pct[UDP].len}  Checksum = {pct[UDP].chksum}"
 
     if pct.haslayer(IP):
+        # IPv4: TTL, flags, tamanho total e checksum.
         flag = pct[IP].flags
         if not flag :
             flag = "0"
         return f"TTL = {pct[IP].ttl}  Flag = {flag}  Len = {pct[IP].len}  Checksum = {pct[IP].chksum}"
     
-    if pct.haslayer(IPv6):
-        return f"Hope Limit = {pct[IPv6].hlim}  Next Header = {pct[IPv6].nh}  Payload Length = {pct[IPv6].plen}"
-    
     return ""
 
 def parse():
+    # Processa argumentos de linha de comandos (qnt, prtl, ip, mac, log, iface, live).
     parser = argparse.ArgumentParser(
         prog='LarpSniffer',
         description='----- Internet Packet Sniffer -----',
@@ -107,14 +174,15 @@ def parse():
 
     args = parser.parse_args()
 
+    # Default behaviour: if user didn't request non-live capture options, run live
     if not args.live:
-        if (not args.log and args.qnt) or (not args.log and not args.qnt):
+        if args.qnt is None and args.log is None:
             args.live = True
 
     return args
 
-def printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, mac, info, live, qnt) -> str:
-    #testa se tem --mac primeiro se não tiver dá default para o IP 
+def printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, mac, info, live) -> str:
+    # Formata uma linha de pacote para exibição (prioridade: MAC se --mac, senão IP).
     if mac and Ether in pkt:
         src = src_mac
         dst = dst_mac
@@ -137,6 +205,7 @@ def printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt,
     return p, dados
 
 def filtro (prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip) -> bool:
+    # Verifica se o pacote passa nos critérios de filtro (protocolo, IP, MAC).
     if prtl:
         if prtl != protocol: return False
     
@@ -154,6 +223,7 @@ def filtro (prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip) -> bool:
     return True
 
 def logs(nomeFicheiro, p, log):
+    # Regista um pacote num ficheiro .txt (linha) ou .csv (linha estruturada).
     if log == ".txt":
         with open(nomeFicheiro, 'a') as f:
             f.write(f"{p}\n")
@@ -162,50 +232,71 @@ def logs(nomeFicheiro, p, log):
             writer = csv.writer(f)
             writer.writerow(p)
 
-def sniffer(pkt, prtl, ip, mac, log, nomeFicheiro, capture_state, stop_capture, live, qnt=None) -> None:
-    # processa um pacote recebido pelo callback do Scapy (prn)
-    #data/hora do pacote
+def sniffer(pkt, prtl, ip, mac, log, nomeFicheiro, capture_state, stop_capture, live) -> None:
+    # Callback do Scapy para processar cada pacote: extrai campos, detecta fragments, filtra, regista.
+    # Calcula timestamp, tamanho, protocolo e endereços.
     tempo = datetime.fromtimestamp(pkt.time).strftime("%H:%M:%S.%f")[:-3]
 
-    #interface
-    iface = pkt.sniffed_on
-
-    # Tamanho
     size = len(pkt)
-
-    #protocol
     protocol = detetar_protocolo(pkt)
+    src_mac = pkt[Ether].src if Ether in pkt else "?"
+    dst_mac = pkt[Ether].dst if Ether in pkt else "?"
+    src_ip = pkt[IP].src if IP in pkt else "?"
+    dst_ip = pkt[IP].dst if IP in pkt else "?"
 
-    # MAC addresses
-    if Ether in pkt:
-        src_mac = pkt[Ether].src 
-    else: src_mac = "?" 
-    if Ether in pkt:
-        dst_mac = pkt[Ether].dst
-    else: dst_mac = "?" 
-
-    # IP addresses
-    if IP in pkt:
-        src_ip = pkt[IP].src 
-    else: src_ip = "?" 
-    if IP in pkt:
-        dst_ip = pkt[IP].dst
-    else: dst_ip = "?" 
-
-    # resumo do conteúdo
     info = conteudo_protocolo(pkt)
 
-    if filtro(prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip):
-        i = capture_state.get('i', 0)
-        p, dados = printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, mac, info, live, qnt)
-        if log == ".txt":
-            logs(nomeFicheiro, p, log)
-        elif log == ".csv" or log == ".json":
-            logs(nomeFicheiro, dados, log)
-        capture_state['i'] = i + 1
+    # Detecta fragments IPv4 (offset != 0 ou MF=1) e agrupa-os por (src,dst,proto,id).
+    if IP in pkt:
+        try:
+            frag_offset = int(pkt[IP].frag)
+        except (ValueError, TypeError, AttributeError):
+            frag_offset = 0
+
+        mf = False
+        # Testa bit MF (0x20) da flag de fragmentação.
+        try:
+            flags = pkt[IP].flags
+            mf = bool(getattr(flags, 'MF', False) or (int(flags) & 0x20))
+        except Exception:
+            mf = False
+
+        if frag_offset != 0 or mf:
+            frags = capture_state.get('frags')
+            if frags is None:
+                frags = {}
+                capture_state['frags'] = frags
+
+            key = (pkt[IP].src, pkt[IP].dst, getattr(pkt[IP], 'proto', '?'), getattr(pkt[IP], 'id', '?'))
+            lst = frags.get(key)
+            if lst is None:
+                lst = []
+                frags[key] = lst
+
+            # Usa o próximo índice para agrupar fragments.
+            cur_idx = capture_state.get('i', 0) + 1
+            if cur_idx not in lst:
+                lst.append(cur_idx)
+
+            frag_summary = f"FRAG id={key[3]} off={frag_offset} MF={1 if mf else 0} parts={','.join(str(x) for x in lst)}"
+            info = f"{info}   | {frag_summary}" if info else frag_summary
+
+    # Aplica filtros; se não passar, ignora o pacote.
+    if not filtro(prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip):
+        return
+
+    # Imprime e regista o pacote.
+    i = capture_state.get('i', 0)
+    p, dados = printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, mac, info, live)
+    if log == ".txt":
+        logs(nomeFicheiro, p, log)
+    elif log == ".csv":
+        logs(nomeFicheiro, dados, log)
+    capture_state['i'] = i + 1
 
 
 def ficheiro(log) -> str:
+    # Cria ficheiro de saída com cabeçalho (texto ou CSV).
     tempo = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
     nome = f"captura_{tempo}{log}"
 
@@ -224,6 +315,7 @@ def ficheiro(log) -> str:
     return nome
 
 def main() -> int:
+    # Captura de pacotes: processa argumentos, cria ficheiro, executa sniff.
     args = parse()
 
     stop_capture = {"value": False}
@@ -256,7 +348,7 @@ def main() -> int:
 
             print(f"\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
             capture_state = {'i': i}
-            sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live, args.qnt), store=False, stop_filter=lambda x: stop_capture['value'], iface=args.iface if args.iface else None)
+            sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'], iface=args.iface if args.iface else None)
             i = capture_state.get('i', i)
 
         else:
@@ -273,9 +365,9 @@ def main() -> int:
             capture_state = {'i': i}
             has_filters = bool(args.prtl or args.ip or args.mac)
             if has_filters:
-                sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live, args.qnt), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
+                sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
             else:
-                sniff(count=args.qnt, prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live, args.qnt), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
+                sniff(count=args.qnt, prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
             i = capture_state.get('i', i)
             
         
@@ -287,9 +379,9 @@ def main() -> int:
         capture_state = {'i': i}
         has_filters = bool(args.prtl or args.ip or args.mac)
         if has_filters:
-            sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live, args.qnt), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
+            sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
         else:
-            sniff(count=args.qnt, prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live, args.qnt), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
+            sniff(count=args.qnt, prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
         i = capture_state.get('i', i)
 
     elif args.log:
@@ -300,7 +392,7 @@ def main() -> int:
 
         print (f"Prima Ctrl+C para sair \n")
         capture_state = {'i': i}
-        sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live, args.qnt), store=False, stop_filter=lambda x: stop_capture['value'], iface=args.iface if args.iface else None)
+        sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'], iface=args.iface if args.iface else None)
         i = capture_state.get('i', i)
 
 
