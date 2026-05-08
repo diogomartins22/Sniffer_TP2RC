@@ -6,7 +6,7 @@ Sniffer de pacotes em Python com análise de tráfego de rede e suporte a múlti
 
 ## Descrição
 
-CLI de captura e análise de pacotes de rede usando Scapy. Detecta e formata resumos de protocolos comuns (ARP, DHCP, DNS, ICMP, TCP, UDP, IPv4), regista em ficheiros de texto ou CSV, e identifica fragmentação IPv4.
+Captura e análise de pacotes de rede usando Scapy. Detecta e formata resumos de protocolos comuns (ARP, DHCP, DNS, ICMP, TCP, UDP, IPv4, IPv6), regista em ficheiros de texto ou CSV, e identifica fragmentação IPv4.
 
 ### Características
 
@@ -31,7 +31,19 @@ CLI de captura e análise de pacotes de rede usando Scapy. Detecta e formata res
 
 ## Uso
 
-### Captura contínua (live)
+### Filtros Disponíveis
+
+- `--qnt` - Número de pacotes a capturar
+- `--prtl` - Protocolo (ARP, DHCP, DNS, ICMP, TCP, UDP, HTTP, HTTPS, IPv4, IPv6, Ethernet)
+- `--ip` - Filtrar por endereço IP (origem ou destino)
+- `--mac` - Filtrar por endereço MAC (origem ou destino)
+- `--iface` - Interface de rede
+- `--log` - Tipo de ficheiro de saída (.txt ou .csv)
+- `--live` - Modo captura contínua
+
+
+
+### Captura (live)
 
 ```
 sudo python3 main.py
@@ -56,6 +68,14 @@ sudo python3 main.py --qnt 100 --log .csv    # CSV estruturado
 sudo python3 main.py --prtl DNS --qnt 50 --log .txt
 sudo python3 main.py --prtl DHCP --qnt 20 --log .csv
 sudo python3 main.py --prtl ICMP --qnt 30
+```
+### Filtrar por interface
+
+```
+sudo python3 main.py --iface eth0
+sudo python3 main.py --iface wlp2s0 --qnt 50
+sudo python3 main.py --iface eth0 --prtl DHCP --qnt 20 --log .csv
+sudo python3 main.py --iface wlp2s0 --prtl ICMP --qnt 30 --log .txt
 ```
 
 ### Filtrar por IP
