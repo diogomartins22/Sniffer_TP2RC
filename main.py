@@ -323,6 +323,8 @@ def main() -> int:
     def tratar_sigint(_sig, _frame) -> None:
         stop_capture["value"] = True
         print("\nA parar captura...")
+        # Interrompe imediatamente o sniff, mesmo sem chegada de novos pacotes.
+        raise KeyboardInterrupt
 
     signal.signal(signal.SIGINT, tratar_sigint)
 
@@ -336,32 +338,47 @@ def main() -> int:
 
     i = 0
 
-    if args.live:
+    try:
+        if args.live:
 
-        if not args.qnt:
+            if not args.qnt:
 
-            if args.log:
+                if args.log:
 
-                print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+                    print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
 
-            print ("\n--- [Modo live ativo] Ctrl+C para sair ---\n")
+                print ("\n--- [Modo live ativo] Ctrl+C para sair ---\n")
 
-            print(f"\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
-            capture_state = {'i': i}
-            sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'], iface=args.iface if args.iface else None)
-            i = capture_state.get('i', i)
+                print(f"\n{'':<5}{'Tempo':<20} {'Origem':<20} {'Destino':<20} {'Protocolo':<10} {'Tamanho':<10} {'Info'}")
+                capture_state = {'i': i}
+                sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'], iface=args.iface if args.iface else None)
+                i = capture_state.get('i', i)
 
-        else:
+            else:
 
-            if args.log:
+                if args.log:
 
-                print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+                    print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
 
-            print ("\n--- [Modo live ativo] ---\n")
+                print ("\n--- [Modo live ativo] ---\n")
 
-            print (f"\n--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
+                print (f"\n--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
 
-            print(f"\n{"":<5}{"Tempo":<20} {"Origem":<20} {"Destino":<20} {"Protocolo":<10} {"Tamanho":<10} {"Info"}")
+                print(f"\n{'':<5}{'Tempo':<20} {'Origem':<20} {'Destino':<20} {'Protocolo':<10} {'Tamanho':<10} {'Info'}")
+                capture_state = {'i': i}
+                has_filters = bool(args.prtl or args.ip or args.mac)
+                if has_filters:
+                    sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
+                else:
+                    sniff(count=args.qnt, prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
+                i = capture_state.get('i', i)
+            
+        
+        elif args.log and args.qnt:
+
+            print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+
+            print (f"--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
             capture_state = {'i': i}
             has_filters = bool(args.prtl or args.ip or args.mac)
             if has_filters:
@@ -369,31 +386,19 @@ def main() -> int:
             else:
                 sniff(count=args.qnt, prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
             i = capture_state.get('i', i)
-            
-        
-    elif args.log and args.qnt:
 
-        print (f"\n--- [Modo ficheiro ativo] A guardar no ficheiro {nomeFicheiro} ... ---\n")
+        elif args.log:
 
-        print (f"--- [Modo limitado ativo] Captura de {args.qnt} pacotes --- \n")
-        capture_state = {'i': i}
-        has_filters = bool(args.prtl or args.ip or args.mac)
-        if has_filters:
-            sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
-        else:
-            sniff(count=args.qnt, prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'] or capture_state.get('i', 0) >= args.qnt, iface=args.iface if args.iface else None)
-        i = capture_state.get('i', i)
+            print (f"\n--- [Modo ficheiro ativo] Ficheiro: {nomeFicheiro} ---\n")
 
-    elif args.log:
+            print (f"A guardar captura...\n")
 
-        print (f"\n--- [Modo ficheiro ativo] Ficheiro: {nomeFicheiro} ---\n")
-
-        print (f"A guardar captura...\n")
-
-        print (f"Prima Ctrl+C para sair \n")
-        capture_state = {'i': i}
-        sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'], iface=args.iface if args.iface else None)
-        i = capture_state.get('i', i)
+            print (f"Prima Ctrl+C para sair \n")
+            capture_state = {'i': i}
+            sniff(prn=lambda pkt: sniffer(pkt, args.prtl, args.ip, args.mac, args.log, nomeFicheiro, capture_state, stop_capture, args.live), store=False, stop_filter=lambda x: stop_capture['value'], iface=args.iface if args.iface else None)
+            i = capture_state.get('i', i)
+    except KeyboardInterrupt:
+        pass
 
 
     print("\n--- [LarpSniffer] Programa Terminado! ---\n")
