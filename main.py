@@ -6,6 +6,9 @@ from datetime import datetime
 from scapy.all import sniff, Ether, IP, IPv6, ARP, ICMP, TCP, UDP, DNS, DHCP, get_if_list, conf
 import csv
 
+# Dicionário para rastrear requests em aberto (ARP e ICMP)
+pending_requests = {}
+
 def detetar_protocolo(pct) -> str:
     # Identifica o tipo de protocolo do pacote (ARP, DHCP, DNS, ICMP, TCP, UDP, IPv4, etc).
     if pct.haslayer(ARP):
@@ -174,13 +177,17 @@ def parse():
     return args
 
 def printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, mac, info, live, qnt, iface) -> str:
-    # Formata uma linha de pacote para exibição (prioridade: MAC se --mac, senão IP).
+    # Formata uma linha de pacote para exibição (prioridade: MAC se --mac, senão IP, senão ARP IP).
     if mac and Ether in pkt:
         src = src_mac
         dst = dst_mac
     elif IP in pkt:
         src = src_ip
         dst = dst_ip
+    elif pkt.haslayer(ARP):
+        # Para ARP, mostrar os IPs de ARP
+        src = pkt[ARP].psrc
+        dst = pkt[ARP].pdst
     elif Ether in pkt:
         src = src_mac
         dst = dst_mac
@@ -241,11 +248,52 @@ def sniffer(pkt, prtl, ip, mac, log, nomeFicheiro, capture_state, live, qnt, ifa
     # Aplica filtros; se não passar, ignora o pacote.
     if not filtro(prtl, ip, mac, protocol, src_mac, dst_mac, src_ip, dst_ip):
         return
+    
+    # Flag para indicar se é um pacote reply
+    is_reply = False
+    
+    # Rastreamento de requests/replies para ARP e ICMP
+    if pkt.haslayer(ARP):
+        if pkt[ARP].op == 1:  # ARP request
+            # Chave: (MAC origem, IP consultado)
+            key = (pkt[ARP].psrc, pkt[ARP].pdst)
+            pending_requests[key] = pkt.time
+        elif pkt[ARP].op == 2:  # ARP reply
+            # Procurar key correspondente: (MAC que fez o request, IP que respondeu)
+            key = (pkt[ARP].pdst, pkt[ARP].psrc)
+            if key in pending_requests:
+                delta = round((pkt.time - pending_requests.pop(key)) * 1000, 2)
+                msg = f"\nEste pacote é o reply ao request de {key[0]} para {key[1]} | tempo: {delta}ms"
+                if live:
+                    print(msg)
+                if log:
+                    logs(nomeFicheiro, msg, log)
+                is_reply = True
+    
+    if pkt.haslayer(ICMP):
+        if pkt[ICMP].type == 8:  # ICMP echo request
+            # Chave: (IP origem, IP destino, ID)
+            key = (pkt[IP].src, pkt[IP].dst, pkt[ICMP].id)
+            pending_requests[key] = pkt.time
+        elif pkt[ICMP].type == 0:  # ICMP echo reply
+            # Procurar key correspondente
+            key = (pkt[IP].dst, pkt[IP].src, pkt[ICMP].id)
+            if key in pending_requests:
+                delta = round((pkt.time - pending_requests.pop(key)) * 1000, 2)
+                msg = f"\nEste pacote é o reply ao request de {key[0]} para {key[1]} (id={key[2]}) | tempo: {delta}ms"
+                if live:
+                    print(msg)
+                if log:
+                    logs(nomeFicheiro, msg, log)
+                is_reply = True
+    
     # Imprime e regista o pacote.
     i = capture_state.get('i', 0)
     p, dados = printPacote(i, tempo, size, protocol, src_mac, dst_mac, src_ip, dst_ip, pkt, mac, info, live, qnt, iface)
     if log == ".txt":
         logs(nomeFicheiro, p, log)
+        if is_reply:
+            logs(nomeFicheiro, "", log)
     elif log == ".csv":
         logs(nomeFicheiro, dados, log)
     capture_state['i'] = i + 1
